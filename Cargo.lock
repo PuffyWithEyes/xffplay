@@ -31,6 +31,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-synesthesist"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af54084064d206ba671ba1bed9de19e9775bec26fef3d19cc3476085f7547870"
+
+[[package]]
 name = "libc"
 version = "0.2.147"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,6 +49,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "msg"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afd5e70f68c3504344212938b2a41a6c299444f00ccb1dded0b4f26ffaf55cc4"
+dependencies = [
+ "io-synesthesist",
 ]
 
 [[package]]
@@ -121,5 +136,6 @@ dependencies = [
 name = "xffplay"
 version = "0.0.0"
 dependencies = [
+ "msg",
  "x11rb",
 ]
