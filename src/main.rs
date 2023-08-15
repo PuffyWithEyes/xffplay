@@ -1,6 +1,7 @@
 extern crate x11rb;
+extern crate msg;
 
-use x11rb::connection::{Connection, RequestConnection};
+use x11rb::connection::Connection;
 use x11rb::errors::{ReplyOrIdError, ConnectionError};
 use x11rb::protocol::xproto::*;
 use std::{
@@ -9,15 +10,16 @@ use std::{
 	process::{self, Command, Child},
 };
 
+use msg::ffi::*;
+
 
 const RED_COLOR: u32 = 0xFF0000;
 const GREEN_COLOR: u32 = 0x00FF00;
-// const BLUE_COLOR: u32 = 0x0000FF;
-// const YELLOW_COLOR: u32 = 0xFFFF00;
+const BLUE_COLOR: u32 = 0x0000FF;
+const YELLOW_COLOR: u32 = 0xFFFF00;
 const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
-//const ERROR: isize = -1_isize;
 const TIMEOUT: u64 = 3_u64;
-const FONT: &str = "Cantarell:size=32";
+const ERROR: i64 = -1_i64;
 
 
 fn find_windows<C>(
@@ -47,6 +49,7 @@ where C: Connection {
         .value32()
         .and_then(|mut iter| iter.next())
         .ok_or("Failed to get pid")?;
+	
     Ok(pid)
 }
 
@@ -116,6 +119,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.expect("Failure to make ffplay process");
 	let child_pid = command.id();
 
+	let mut message = String::new();
+	
+	thread::spawn(move || {
+		let mut msg = MsgBuf {
+			mtype: 0,
+			mtext: [0; MSG_BUFF],
+		};
+		
+		let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
+
+		if key == ERROR {
+			panic!("Problems with ftok");
+		}
+
+		let msgid = unsafe { msgget(key as i32, 0666 | 01000) };
+
+		if msgid as i64 == ERROR {
+			panic!("Problems with msgget");
+		}
+		
+		loop {
+			unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
+			
+			let string = String::from_utf8_lossy(&msg.mtext[..]).to_string();
+
+			// message = char_list.iter().collect();
+			
+			println!("New message: {}", string);
+		}
+	});
+	
 	thread::sleep(Duration::from_secs(5));
 	
     let (conn, screen_num) = x11rb::connect(None)?;
@@ -133,7 +167,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			conn.open_font(font, b"7x15")?;
 			
 			let red_gc = create_gc_with_foreground(conn, window, RED_COLOR)?;
-			//let green_gc = create_gc_with_foreground(conn, window, GREEN_COLOR)?;
+			let green_gc = create_gc_with_foreground(conn, window, GREEN_COLOR)?;
+			let blue_gc = create_gc_with_foreground(conn, window, BLUE_COLOR)?;
+			let yellow_gc = create_gc_with_foreground(conn, window, YELLOW_COLOR)?;
 			let green_font_gc = create_gc_with_foreground_font(conn, window, GREEN_COLOR, font)?;
 
 			conn.close_font(font)?;
