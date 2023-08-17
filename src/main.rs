@@ -1,8 +1,6 @@
-extern crate x11rb;
-extern crate msg;
+mod draw;
 
 use x11rb::connection::Connection;
-use x11rb::errors::{ReplyOrIdError, ConnectionError};
 use x11rb::protocol::xproto::*;
 use std::{
 	thread,
@@ -10,13 +8,9 @@ use std::{
 	process::{self, Command, Child},
 };
 
-use msg::ffi::*;
+use draw::*;
 
 
-const RED_COLOR: u32 = 0xFF0000;
-const GREEN_COLOR: u32 = 0x00FF00;
-const BLUE_COLOR: u32 = 0x0000FF;
-const YELLOW_COLOR: u32 = 0xFFFF00;
 const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
 const TIMEOUT: u64 = 3_u64;
 const ERROR: i64 = -1_i64;
@@ -54,62 +48,6 @@ where C: Connection {
 }
 
 
-fn create_gc_with_foreground<C>(
-	conn: &C,
-	win_id: Window,
-	foreground: u32,
-) -> Result<GcontextWrapper<'_, C>, ReplyOrIdError>
-where C: Connection {
-	GcontextWrapper::create_gc(
-        conn,
-        win_id,
-        &CreateGCAux::new()
-            .graphics_exposures(0)
-            .foreground(foreground),
-    )
-}
-
-
-fn create_gc_with_foreground_font<C>(
-	conn: &C,
-	win_id: Window,
-	foreground: u32,
-	font: Font,
-) -> Result<GcontextWrapper<'_, C>, ReplyOrIdError>
-where C: Connection {
-	GcontextWrapper::create_gc(
-		conn,
-		win_id,
-		&CreateGCAux::new()
-			.graphics_exposures(0)
-			.foreground(foreground)
-			.font(font),
-	)
-}
-
-
-fn draw_line<C>(
-    conn: &C,
-    win_id: Window,
-    gc: Gcontext,
-    window_size: (u16, u16),
-) -> Result<(), ConnectionError>
-where C: Connection {
-	let point1 = Point {
-		x: 0,
-		y: (window_size.1 / 2) as i16,
-	};
-	let point2 = Point {
-		x: window_size.0 as i16,
-		y: (window_size.1 / 2) as i16,
-	};
-	
-	conn.poly_line(CoordMode::ORIGIN, win_id, gc, &[point1, point2])?;
-
-    Ok(())
-}
-
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let command: Child = Command::new("ffplay")
 		.args(&["-video_size", "1920x1080", "-framerate", "30", "/dev/video0"])
@@ -119,36 +57,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.expect("Failure to make ffplay process");
 	let child_pid = command.id();
 
-	let mut message = String::new();
+	// let mut message = String::new();
 	
-	thread::spawn(move || {
-		let mut msg = MsgBuf {
-			mtype: 0,
-			mtext: [0; MSG_BUFF],
-		};
+	// thread::spawn(move || {
+	// 	let mut msg = MsgBuf {
+	// 		mtype: 0,
+	// 		mtext: [0; MSG_BUFF],
+	// 	};
 		
-		let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
+	// 	let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
 
-		if key == ERROR {
-			panic!("Problems with ftok");
-		}
+	// 	if key == ERROR {
+	// 		panic!("Problems with ftok");
+	// 	}
 
-		let msgid = unsafe { msgget(key as i32, 0666 | 01000) };
+	// 	let msgid = unsafe { msgget(key as i32, 0666 | 01000) };
 
-		if msgid as i64 == ERROR {
-			panic!("Problems with msgget");
-		}
+	// 	if msgid as i64 == ERROR {
+	// 		panic!("Problems with msgget");
+	// 	}
 		
-		loop {
-			unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
+	// 	loop {
+	// 		unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
 			
-			let string = String::from_utf8_lossy(&msg.mtext[..]).to_string();
-
-			// message = char_list.iter().collect();
-			
-			println!("New message: {}", string);
-		}
-	});
+	// 		println!("New message: {:?}", msg.mtext);
+	// 	}
+	// });
 	
 	thread::sleep(Duration::from_secs(5));
 	
@@ -163,22 +97,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let pid = get_window_pid(conn, window)?;
 
 		if child_pid == pid {
-			let font = conn.generate_id()?;
-			conn.open_font(font, b"7x15")?;
-			
-			let red_gc = create_gc_with_foreground(conn, window, RED_COLOR)?;
-			let green_gc = create_gc_with_foreground(conn, window, GREEN_COLOR)?;
-			let blue_gc = create_gc_with_foreground(conn, window, BLUE_COLOR)?;
-			let yellow_gc = create_gc_with_foreground(conn, window, YELLOW_COLOR)?;
-			let green_font_gc = create_gc_with_foreground_font(conn, window, GREEN_COLOR, font)?;
-
-			conn.close_font(font)?;
+			let screen = &conn.setup().roots[screen_num];
 			
 			loop {
-				draw_line(conn, window, red_gc.gcontext(), DEFAULT_SIZE)?;
+				draw_text(conn, screen, window, 100, 100, "HELLO WORLD!")?;
 
-				conn.image_text8(window, green_font_gc.gcontext(), 100, 100, b"Hello World!")?;
-				
+				draw_line(conn, window, DEFAULT_SIZE)?;
+
 				conn.flush()?;
 
 				thread::sleep(Duration::from_millis(TIMEOUT));
