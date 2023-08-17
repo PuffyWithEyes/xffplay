@@ -55,7 +55,7 @@ pub fn draw_text<C>(
     window: Window,
     x1: i16,
     y1: i16,
-    label: &str,
+    label: String,
 ) -> Result<(), Box<dyn std::error::Error>>
 where C: Connection {
     let gc = gc_font_get(conn, screen, window, "6x13")?;

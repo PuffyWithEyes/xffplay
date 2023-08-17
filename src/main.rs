@@ -1,14 +1,16 @@
 mod draw;
 
-use x11rb::connection::Connection;
-use x11rb::protocol::xproto::*;
+use x11rb::{
+	connection::Connection,
+	protocol::xproto::*,
+};
 use std::{
 	thread,
 	time::Duration,
 	process::{self, Command, Child},
 };
-
 use draw::*;
+use msg::ffi::*;
 
 
 const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
@@ -57,38 +59,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.expect("Failure to make ffplay process");
 	let child_pid = command.id();
 
-	// let mut message = String::new();
+	let mut message = String::from("No messages!");
+	let message1 = std::sync::Arc::new(std::sync::Mutex::new(message));
+	let message = &*message1;
 	
-	// thread::spawn(move || {
-	// 	let mut msg = MsgBuf {
-	// 		mtype: 0,
-	// 		mtext: [0; MSG_BUFF],
-	// 	};
+	thread::spawn(move || {
+		let mut msg = MsgBuf {
+			mtype: 0,
+			mtext: [0; MSG_BUFF],
+		};
 		
-	// 	let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
+		let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
 
-	// 	if key == ERROR {
-	// 		panic!("Problems with ftok");
-	// 	}
+		if key == ERROR {
+			panic!("Problems with ftok");
+		}
 
-	// 	let msgid = unsafe { msgget(key as i32, 0666 | 01000) };
+		let msgid = unsafe { msgget(key as i32, 0666 | 01000) };
 
-	// 	if msgid as i64 == ERROR {
-	// 		panic!("Problems with msgget");
-	// 	}
+		if msgid as i64 == ERROR {
+			panic!("Problems with msgget");
+		}
 		
-	// 	loop {
-	// 		unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
-			
-	// 		println!("New message: {:?}", msg.mtext);
-	// 	}
-	// });
+		loop {
+			unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
+
+			let mut message_ptr = message.lock().unwrap();
+			let data: Vec<char> = msg.mtext.iter().map(|&x| char::from(x as u8)).collect();
+			*message_ptr = data.into_iter().map(|c| c.to_string()).collect();
+		}
+	});
 	
 	thread::sleep(Duration::from_secs(5));
 	
     let (conn, screen_num) = x11rb::connect(None)?;
 
-	let conn1 = std::sync::Arc::new(conn);
+	let conn1 = std::rc::Rc::new(conn);
     let conn = &*conn1;
 
 	let screen = &conn.setup().roots[screen_num];
@@ -98,9 +104,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		if child_pid == pid {
 			let screen = &conn.setup().roots[screen_num];
+			let message_ptr = message.lock()?;
 			
 			loop {
-				draw_text(conn, screen, window, 100, 100, "HELLO WORLD!")?;
+				draw_text(conn, screen, window, 100, 100, message_ptr.to_string())?;
 
 				draw_line(conn, window, DEFAULT_SIZE)?;
 
