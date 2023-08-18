@@ -51,26 +51,25 @@ where C: Connection {
 
 pub fn draw_text<C>(
     conn: &C,
-    screen: &Screen,
     window: Window,
-    x1: i16,
-    y1: i16,
-    label: String,
+    coord: (i16, i16),
+    number: isize,
 ) -> Result<(), Box<dyn std::error::Error>>
 where C: Connection {
-    let gc = gc_font_get(conn, screen, window, "6x13")?;
+    let gc = gc_font_get(conn, window, "6x13".to_string(), number)?;
 
-    conn.image_text8(window, gc, x1, y1, label.as_bytes())?;
+    conn.image_text8(window, gc, coord.0, coord.1, number.to_string().as_bytes())?;
     conn.free_gc(gc)?;
 
     Ok(())
 }
 
+
 fn gc_font_get<C>(
     conn: &C,
-    screen: &Screen,
     window: Window,
-    font_name: &str,
+    font_name: String,
+	number: isize,
 ) -> Result<Gcontext, ReplyOrIdError>
 where C: Connection {
     let font = conn.generate_id()?;
@@ -78,9 +77,19 @@ where C: Connection {
     conn.open_font(font, font_name.as_bytes())?;
 
     let gc = conn.generate_id()?;
+
+	let mut color = BLUE_COLOR;
+
+	if number > 80 {
+		color = RED_COLOR;
+	} else if number > 50 {
+		color = YELLOW_COLOR;
+	} else if number > 35 {
+		color = GREEN_COLOR;
+	}
+	
     let values = CreateGCAux::new()
-        .foreground(GREEN_COLOR)
-        .background(screen.black_pixel)
+        .foreground(color)
         .font(font);
     conn.create_gc(gc, window, &values)?;
 
