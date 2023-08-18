@@ -1,2 +1,2 @@
-project('qtmpv-child', 'c')
-executable('qtmpv-child', 'main.c')
+project('xffplay-child', 'c')
+executable('xffplay-child', 'main.c')

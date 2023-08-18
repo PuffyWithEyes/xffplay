@@ -18,6 +18,7 @@ const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
 const TEXT_PLACE: (i16, i16) = (100_i16, 100_i16);
 const TIMEOUT: u64 = 3_u64;
 const ERROR: i64 = -1_i64;
+const FTOK_PATH: &str = "/etc/xffplay/token.txt";
 
 
 fn find_windows<C>(
@@ -70,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			mtext: [0; MSG_BUFF],
 		};
 		
-		let key = unsafe { ftok("/etc/qtmpv/token.txt".as_ptr() as *mut i8, 1) };
+		let key = unsafe { ftok(FTOK_PATH.as_ptr() as *mut i8, 1) };
 
 		if key == ERROR {
 			panic!("Problems with ftok");

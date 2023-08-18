@@ -8,7 +8,7 @@
 
 #define TRUE 1
 #define MSGLEN 32
-#define FTOK_PATH "/etc/qtmpv/token.txt"
+#define FTOK_PATH "/etc/xffplay/token.txt"
 
 
 typedef struct
