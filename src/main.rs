@@ -5,6 +5,8 @@ use x11rb::{
 	protocol::xproto::*,
 };
 use std::{
+	fs,
+	io,
 	thread,
 	time::Duration,
 	sync::mpsc,
@@ -19,6 +21,7 @@ const TEXT_PLACE: (i16, i16) = (100_i16, 100_i16);
 const TIMEOUT: u64 = 3_u64;
 const ERROR: i64 = -1_i64;
 const FTOK_PATH: &str = "/etc/xffplay/token.txt";
+const DEV_PATH: &str = "/dev/";
 
 
 fn find_windows<C>(
@@ -53,9 +56,49 @@ where C: Connection {
 }
 
 
+fn get_video_stream() -> Result<String, Box<dyn std::error::Error>> {
+	let dev = fs::read_dir(DEV_PATH)?;
+	let mut video_streams: Vec<String> = Vec::new();
+
+	for file in dev {
+		if file.as_ref().unwrap().file_name().to_str().unwrap().to_string().contains("video") {
+			video_streams.push(file?.file_name().to_str().unwrap().to_string());
+		}
+	}
+
+	println!("Какой видеопоток Вы хотите использовать? (Обычно это /dev/video0):");
+
+	let mut counter = 0_usize;
+
+	for stream in &video_streams {
+		counter += 1;
+		println!("{}. {}{}", counter, DEV_PATH, stream);
+	}
+
+	print!(">> ");
+	
+	let mut stream: String = String::new();
+
+	io::stdin().read_line(&mut stream)?;
+
+	stream = stream.replace("\n", "");
+	
+	if let Ok(number) = stream.parse::<usize>() {
+		let mut full_path = DEV_PATH.to_string();
+		full_path.push_str(&video_streams[number - 1]);
+		
+		return Ok(full_path);
+	} else {
+		panic!("Выбран неверный поток");
+	}
+}
+
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let stream = get_video_stream()?;
+	
 	let command: Child = Command::new("ffplay")
-		.args(&["-video_size", "1920x1080", "-framerate", "30", "/dev/video0"])
+		.args(&["-video_size", "1920x1080", "-framerate", "30", &stream])
 		.stdout(process::Stdio::null())
         .stderr(process::Stdio::null())
 		.spawn()
@@ -105,9 +148,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			counter = 0;
 
 			let message = String::from_utf8_lossy(&u8_vec).to_string();
-			let number = message.parse().unwrap();
-			
-			sender.send(number).unwrap();
+
+			if let Ok(number) = message.parse() {
+				sender.send(number).unwrap();
+			}
 		}
 	});
 
