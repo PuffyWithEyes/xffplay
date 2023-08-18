@@ -8,4 +8,5 @@ Cargo.lock
 /target/debug/
 /target/release/
 test
+.cache
 
