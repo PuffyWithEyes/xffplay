@@ -7,7 +7,7 @@ function main {
 		exit 1
 	fi
 	
-	packages=("curl", "xorg", "xinit")
+	packages=("curl", "xorg", "xinit", "ffmpeg")
 
 	for package in "${packages[@]}"; do
 		if sudo dpkg -s "$package" >/dev/null 2>&1; then
