@@ -7,6 +7,7 @@ use x11rb::{
 use std::{
 	thread,
 	time::Duration,
+	sync::mpsc,
 	process::{self, Command, Child},
 };
 use draw::*;
@@ -14,6 +15,7 @@ use msg::ffi::*;
 
 
 const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
+const TEXT_PLACE: (i16, i16) = (100_i16, 100_i16);
 const TIMEOUT: u64 = 3_u64;
 const ERROR: i64 = -1_i64;
 
@@ -59,10 +61,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.expect("Failure to make ffplay process");
 	let child_pid = command.id();
 
-	let mut message = String::from("No messages!");
-	let message1 = std::sync::Arc::new(std::sync::Mutex::new(message));
-	let message = &*message1;
-	
+	let (sender, reciever) = mpsc::channel::<isize>();
+	sender.send(0)?;
+
 	thread::spawn(move || {
 		let mut msg = MsgBuf {
 			mtype: 0,
@@ -80,16 +81,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		if msgid as i64 == ERROR {
 			panic!("Problems with msgget");
 		}
+
+		let mut counter = 0_usize;
 		
 		loop {
 			unsafe { msgrcv(msgid + 1, &mut msg, MSG_BUFF as u64, 1, 0); };
 
-			let mut message_ptr = message.lock().unwrap();
-			let data: Vec<char> = msg.mtext.iter().map(|&x| char::from(x as u8)).collect();
-			*message_ptr = data.into_iter().map(|c| c.to_string()).collect();
+			let mut u8_vec: Vec<u8> = Vec::new();
+			
+			while counter < 3 {
+				if msg.mtext[counter] == 0 {
+					counter += 1;
+					
+					continue;
+				}
+				
+				u8_vec.push(msg.mtext[counter] as u8);
+				
+				counter += 1;
+			}
+
+			counter = 0;
+
+			let message = String::from_utf8_lossy(&u8_vec).to_string();
+			let number = message.parse().unwrap();
+			
+			sender.send(number).unwrap();
 		}
 	});
-	
+
 	thread::sleep(Duration::from_secs(5));
 	
     let (conn, screen_num) = x11rb::connect(None)?;
@@ -103,11 +123,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let pid = get_window_pid(conn, window)?;
 
 		if child_pid == pid {
-			let screen = &conn.setup().roots[screen_num];
-			let message_ptr = message.lock()?;
+			let mut old_message = reciever.recv()?;
 			
 			loop {
-				draw_text(conn, screen, window, 100, 100, message_ptr.to_string())?;
+				if let Ok(message) = reciever.try_recv() {
+					draw_text(conn, window, TEXT_PLACE, message)?;
+					old_message = message;
+				} else {
+					draw_text(conn, window, TEXT_PLACE, old_message)?;
+				}
 
 				draw_line(conn, window, DEFAULT_SIZE)?;
 
