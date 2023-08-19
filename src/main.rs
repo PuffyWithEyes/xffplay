@@ -27,7 +27,7 @@ x11rb::atom_manager! {
 
 
 const TEXT_PLACE: (i16, i16) = (100_i16, 100_i16);
-const TIMEOUT: u64 = 3_u64;
+const TIMEOUT: u64 = 5_u64;
 const ERROR: i64 = -1_i64;
 const FTOK_PATH: &str = "/etc/xffplay/token.txt";
 const DEV_PATH: &str = "/dev/";
@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let stream = get_video_stream()?;
 	
 	let command: Child = Command::new("ffplay")
-		.args(&["-video_size", "1920x1080", "-framerate", "10", &stream])
+		.args(&["-video_size", "1920x1080", "-framerate", "24", &stream])
 		.stdout(process::Stdio::null())
         .stderr(process::Stdio::null())
 		.spawn()
@@ -164,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	});
 
-	thread::sleep(Duration::from_secs(5));
+	thread::sleep(Duration::from_secs(TIMEOUT));
 	
     let (conn, screen_num) = x11rb::connect(None)?;
 
@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 			conn.map_window(window)?;
 			
-			let mut old_message = reciever.recv()?;
+			let mut _old_message = reciever.recv()?;
 
 			conn.flush()?;
 			
@@ -201,8 +201,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 							let (width, height): (u16, u16) = (width as _, height as _);
 
 							draw_line(conn, window, (width, height))?;
-
-							draw_text(conn, window, TEXT_PLACE, 5)?;
+							draw_text(conn, window, TEXT_PLACE, 5)?;  // TEMP 5
 
 							conn.flush()?;
 						}
@@ -210,25 +209,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 					Event::ConfigureNotify(event) => {
 						width = event.width;
 						height = event.height;
+
+						draw_line(conn, window, (width, height))?;
+						draw_text(conn, window, TEXT_PLACE, 5)?;
+
+						conn.flush()?;
 					},
 					Event::ClientMessage(event) => {
 						let data = event.data.as_data32();
 
 						if event.format == 32 && event.window == window && data[0] == atoms.WM_DELETE_WINDOW {
-							println!("Окно было закрыто по вашему запросу!");
+							println!("Окно было закрыто по Вашему запросу!");
 
-							return Ok(());
+							break;
 						}
 					},
-					Event::Error(err) => println!("Произошло неизвестное событие с окном: {:?}", err),
-					event => println!("Получено неизвестное событие с окном: {:?}", event),
+					Event::Error(err) => println!("Произошло ошибочное событие с окном: {:?}", err),
+					event => println!("Произошло неизвестное событие с окном: {:?}", event),
 				}
-				
-				thread::sleep(Duration::from_millis(TIMEOUT));
 		 	}
 		}
     }
 
-    Ok(())
+	Ok(())
 }
 
