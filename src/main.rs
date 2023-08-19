@@ -2,7 +2,7 @@ mod draw;
 
 use x11rb::{
 	connection::Connection,
-	protocol::xproto::*,
+	protocol::{Event, xproto::*},
 };
 use std::{
 	fs,
@@ -16,7 +16,16 @@ use draw::*;
 use msg::ffi::*;
 
 
-const DEFAULT_SIZE: (u16, u16) = (1920_u16, 1080_u16);
+x11rb::atom_manager! {
+    pub Atoms: AtomsCookie {
+        WM_PROTOCOLS,
+        WM_DELETE_WINDOW,
+        _NET_WM_NAME,
+        UTF8_STRING,
+    }
+}
+
+
 const TEXT_PLACE: (i16, i16) = (100_i16, 100_i16);
 const TIMEOUT: u64 = 3_u64;
 const ERROR: i64 = -1_i64;
@@ -98,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let stream = get_video_stream()?;
 	
 	let command: Child = Command::new("ffplay")
-		.args(&["-video_size", "1920x1080", "-framerate", "30", &stream])
+		.args(&["-video_size", "1920x1080", "-framerate", "10", &stream])
 		.stdout(process::Stdio::null())
         .stderr(process::Stdio::null())
 		.spawn()
@@ -161,27 +170,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let conn1 = std::rc::Rc::new(conn);
     let conn = &*conn1;
-
+	
 	let screen = &conn.setup().roots[screen_num];
+
+	let atoms = Atoms::new(conn)?.reply()?;
+
+	let win_aux = ChangeWindowAttributesAux::new()
+		.event_mask(EventMask::EXPOSURE | EventMask::STRUCTURE_NOTIFY | EventMask::NO_EVENT);
+
+	let (mut width, mut height) = (1920_u16, 1080_u16);
 	
     for window in find_windows(conn, screen.root)? {
         let pid = get_window_pid(conn, window)?;
 
 		if child_pid == pid {
+			conn.change_window_attributes(window, &win_aux)?;
+
+			conn.map_window(window)?;
+			
 			let mut old_message = reciever.recv()?;
+
+			conn.flush()?;
 			
 			loop {
-				if let Ok(message) = reciever.try_recv() {
-					draw_text(conn, window, TEXT_PLACE, message)?;
-					old_message = message;
-				} else {
-					draw_text(conn, window, TEXT_PLACE, old_message)?;
+				let event = conn.wait_for_event()?;
+				
+				match event {
+					Event::Expose(event) => {
+						if event.count == 0 {
+							let (width, height): (u16, u16) = (width as _, height as _);
+
+							draw_line(conn, window, (width, height))?;
+
+							draw_text(conn, window, TEXT_PLACE, 5)?;
+
+							conn.flush()?;
+						}
+					},
+					Event::ConfigureNotify(event) => {
+						width = event.width;
+						height = event.height;
+					},
+					Event::ClientMessage(event) => {
+						let data = event.data.as_data32();
+
+						if event.format == 32 && event.window == window && data[0] == atoms.WM_DELETE_WINDOW {
+							println!("Окно было закрыто по вашему запросу!");
+
+							return Ok(());
+						}
+					},
+					Event::Error(err) => println!("Произошло неизвестное событие с окном: {:?}", err),
+					event => println!("Получено неизвестное событие с окном: {:?}", event),
 				}
-
-				draw_line(conn, window, DEFAULT_SIZE)?;
-
-				conn.flush()?;
-
+				
 				thread::sleep(Duration::from_millis(TIMEOUT));
 		 	}
 		}
